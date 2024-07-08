@@ -13,91 +13,104 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod utils;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use utils::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
-	// The pallet's runtime storage items.
-	// https://docs.substrate.io/main-docs/build/runtime-storage/
 	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	// Learn more about declaring storage items:
-	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
-	pub type Something<T> = StorageValue<_, u32>;
+	#[pallet::getter(fn get_candidate)]
+	pub type Candidates<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, Candidate<T>>;
 
-	// Pallets use events to inform users when important changes are made.
-	// https://docs.substrate.io/main-docs/build/events-errors/
+	#[pallet::storage]
+	#[pallet::getter(fn get_certificate)]
+	pub type Certificates<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, Certificate<T>>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn get_verifiable_link)]
+	pub type VerifiableLinks<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VerifiableLink<T>>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn get_institution)]
+	pub type Institutions<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, Institution<T>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored { something: u32, who: T::AccountId },
+		/// Event emitted when a new candidate is added to the protocol
+		CandidateAdded { candidate: T::AccountId },
+		/// Event emitted when a new link from a candidate is generated to be verified by the target institute
+		VerifyLinkGenerated { verify_link: Vec<u8> },
+		/// Event emitted when a link is confirmed by the target institute
+		VerifyLinkConfirmed { verify_link: Vec<u8> },
+		/// Event emitted when a link is rejected by the target institute
+		VerifyLinkRejected { verify_link: Vec<u8> },
+        /// Event emitted when a new institution is added to the protocol
+		InsitutionAdded { institution: T::AccountId },
 	}
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Error names should be descriptive.
-		NoneValue,
-		/// Errors should have helpful documentation associated with them.
-		StorageOverflow,
+		/// Not registered candidate
+		NotRegisteredCandidate,
+		/// invalid link
+		InvalidLink,
+		/// Not registered institution
+		NotRegisteredInstitution,
 	}
 
-	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
-	// These functions materialize as "extrinsics", which are often compared to transactions.
-	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
+
 		#[pallet::call_index(0)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/main-docs/build/origins/
+		pub fn register_candidate(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			// Update storage.
-			<Something<T>>::put(something);
-
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored { something, who });
-			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}
 
-		/// An example dispatchable that may throw a custom error.
 		#[pallet::call_index(1)]
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
+		pub fn register_institution(origin: OriginFor<T>) -> DispatchResult {
+            let _who = ensure_signed(origin)?;
+            Ok(())
+        }
 
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => return Err(Error::<T>::NoneValue.into()),
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(())
-				},
-			}
+		#[pallet::call_index(2)]
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
+		pub fn register_certificate(origin: OriginFor<T>) -> DispatchResult {
+			let _who = ensure_signed(origin)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(3)]
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
+		pub fn generate_verifiable_link(origin: OriginFor<T>) -> DispatchResult {
+			let _who = ensure_signed(origin)?;
+			Ok(())
+		}
+
+		/// Verify the proof of the verified link by the institute
+		/// This function should be unsigned transaction as anyone can submit the proof to be verified onchain
+		#[pallet::call_index(4)]
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
+		pub fn verify_link_proof(origin: OriginFor<T>,link_proof:Vec<u8>) -> DispatchResult {
+			let _who = ensure_signed(origin)?;
+			// we gonna use other people's project ( Bathlomeo and Pia) cairo vm verifier to verify the proof
+			Ok(())
 		}
 	}
 }
